@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Usage &#8212; SEAMM Energy Plug-in 2026.9.19 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=2bf1fcf8" />
+    
+    <script src="_static/documentation_options.js?v=e8f1854e"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">SEAMM Energy Plug-in 2026.9.19 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Usage</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h1>
+<p>The Energy step needs a <em>Model Chemistry</em> step before it in the flowchart, choosing a
+method that can be driven as an MDI engine: an <code class="docutils literal notranslate"><span class="pre">xnn:MLFF&#64;&lt;model&gt;</span></code> machine-learned force
+field, <code class="docutils literal notranslate"><span class="pre">MOPAC:SQM&#64;PM6-ORG</span></code>, <code class="docutils literal notranslate"><span class="pre">xTB:SQM&#64;GFN2-xTB</span></code>, or an ORCA DFT model, for example.
+It then evaluates that method’s energy for the structures you select.</p>
+<p>A typical flowchart to label an ensemble for training a force field:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Parameters</span> <span class="o">-&gt;</span> <span class="n">Model</span> <span class="n">Chemistry</span> <span class="o">-&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">SMILES</span> <span class="o">-&gt;</span> <span class="n">Normal</span> <span class="n">Mode</span> <span class="n">Sampling</span>
+           <span class="o">-&gt;</span> <span class="n">Energy</span> <span class="p">(</span><span class="n">configurations</span><span class="p">:</span> <span class="nb">all</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Write</span> <span class="n">Structure</span> <span class="p">(</span><span class="n">Results</span><span class="o">.</span><span class="n">extxyz</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="options">
+<h2>Options<a class="headerlink" href="#options" title="Link to this heading">¶</a></h2>
+<dl class="simple">
+<dt>Structure</dt><dd><p><code class="docutils literal notranslate"><span class="pre">current</span></code> for the current system, the name of a system, or a variable (<code class="docutils literal notranslate"><span class="pre">$name</span></code>)
+holding a list of configurations.</p>
+</dd>
+<dt>using configurations</dt><dd><p><code class="docutils literal notranslate"><span class="pre">current</span></code>, <code class="docutils literal notranslate"><span class="pre">all</span></code>, <code class="docutils literal notranslate"><span class="pre">first</span></code>, <code class="docutils literal notranslate"><span class="pre">last</span></code>, or a selection by name (<code class="docutils literal notranslate"><span class="pre">name</span> <span class="pre">is</span></code>,
+<code class="docutils literal notranslate"><span class="pre">name</span> <span class="pre">matches</span></code> with a glob, <code class="docutils literal notranslate"><span class="pre">name</span> <span class="pre">regexp</span></code>). <code class="docutils literal notranslate"><span class="pre">all</span></code> is the usual choice for an
+ensemble written by an earlier step.</p>
+</dd>
+<dt>Calculate the gradients (forces)</dt><dd><p>Also request the forces. They are stored on the atoms of each configuration and as
+the <code class="docutils literal notranslate"><span class="pre">gradients#Energy#&lt;model&gt;</span></code> property.</p>
+</dd>
+<dt>Calculate the stress (periodic systems)</dt><dd><p>For periodic structures, also request the stress tensor (<code class="docutils literal notranslate"><span class="pre">&lt;STRESS</span></code> over MDI);
+ignored for molecular systems.</p>
+</dd>
+<dt>Results</dt><dd><p>The Results tab lets you save the energy, gradients, stress, maximum/RMS force,
+configuration name and timing to variables or a table; <code class="docutils literal notranslate"><span class="pre">store_results</span></code> is called
+once per structure, so a table gets one row per configuration.</p>
+</dd>
+</dl>
+</section>
+<section id="how-it-runs">
+<h2>How it runs<a class="headerlink" href="#how-it-runs" title="Link to this heading">¶</a></h2>
+<p>The configurations are grouped by what an MDI engine keeps fixed for a session – the
+atomic numbers (in order), charge, spin multiplicity and periodicity – and one engine is
+started per group with <code class="docutils literal notranslate"><span class="pre">seamm_mdi.MDIEngine</span></code>. Within a group the structures are sent
+one after another (<code class="docutils literal notranslate"><span class="pre">&gt;CELL</span></code> for periodic systems, then <code class="docutils literal notranslate"><span class="pre">&gt;COORDS</span></code>) and <code class="docutils literal notranslate"><span class="pre">&lt;ENERGY</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&lt;FORCES</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;STRESS</span></code> are read back, so the program’s start-up (and, for an MLFF,
+loading the model) is paid once. The per-structure energies, forces and timings are
+written to <code class="docutils literal notranslate"><span class="pre">energies.csv</span></code> in the step’s directory; up to 25 structures are also tabled
+in the step output.</p>
+</section>
+<section id="notes">
+<h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>A flowchart edited by hand may name a Model Chemistry that is not MDI-capable; the
+step then stops with a message naming the model chemistry rather than silently doing
+nothing.</p></li>
+<li><p>The Model Chemistry used here need not be the one used to build the structures: a
+cheap method can generate an ensemble and an expensive one label it, or vice versa.</p></li>
+</ul>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Usage</a><ul>
+<li><a class="reference internal" href="#options">Options</a></li>
+<li><a class="reference internal" href="#how-it-runs">How it runs</a></li>
+<li><a class="reference internal" href="#notes">Notes</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/usage.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">SEAMM Energy Plug-in 2026.9.19 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Usage</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, Molecular Sciences Software Institute (MolSSI).
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>energy_step.energy_parameters &#8212; SEAMM Energy Plug-in 2026.9.19 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/classic.css?v=2bf1fcf8" />
+    
+    <script src="../../_static/documentation_options.js?v=e8f1854e"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">SEAMM Energy Plug-in 2026.9.19 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">energy_step.energy_parameters</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for energy_step.energy_parameters</h1><div class="highlight"><pre>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span class="sd">"""</span>
+<span class="sd">Control parameters for the Energy step in a SEAMM flowchart</span>
+<span class="sd">"""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">seamm</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pprint</span>  <span class="c1"># noqa: F401</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="EnergyParameters">
+<a class="viewcode-back" href="../../developer/energy_step.html#energy_step.energy_parameters.EnergyParameters">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">EnergyParameters</span><span class="p">(</span><span class="n">seamm</span><span class="o">.</span><span class="n">Parameters</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    The control parameters for the Energy step.</span>
+
+<span class="sd">    The step evaluates the energy (and optionally the gradients and, for periodic</span>
+<span class="sd">    systems, the stress) of one or many structures with the Model Chemistry</span>
+<span class="sd">    published upstream, driving the program as a resident MDI engine so that</span>
+<span class="sd">    hundreds of structures cost one engine start-up.</span>
+
+<span class="sd">    See Also</span>
+<span class="sd">    --------</span>
+<span class="sd">    Energy, TkEnergy, EnergyParameters, EnergyStep</span>
+<span class="sd">    """</span>
+
+    <span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="c1"># ------------------------------------------------------------------ #</span>
+        <span class="c1"># Input: which structure(s) to evaluate -- SEAMM's standard block</span>
+        <span class="c1"># (source systems / source configurations, by name or from a variable).</span>
+        <span class="c1"># ------------------------------------------------------------------ #</span>
+        <span class="o">**</span><span class="n">seamm</span><span class="o">.</span><span class="n">standard_parameters</span><span class="o">.</span><span class="n">structure_selection_parameters</span><span class="p">,</span>
+        <span class="c1"># ------------------------------------------------------------------ #</span>
+        <span class="c1"># What to compute</span>
+        <span class="c1"># ------------------------------------------------------------------ #</span>
+        <span class="s2">"gradients"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"default"</span><span class="p">:</span> <span class="s2">"yes"</span><span class="p">,</span>
+            <span class="s2">"kind"</span><span class="p">:</span> <span class="s2">"boolean"</span><span class="p">,</span>
+            <span class="s2">"default_units"</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"enumeration"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"yes"</span><span class="p">,</span> <span class="s2">"no"</span><span class="p">),</span>
+            <span class="s2">"format_string"</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"description"</span><span class="p">:</span> <span class="s2">"Calculate the gradients (forces):"</span><span class="p">,</span>
+            <span class="s2">"help_text"</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">"Whether to also calculate the gradients (forces) on the atoms. They "</span>
+                <span class="s2">"are stored on the atoms of each configuration, so e.g. the Write "</span>
+                <span class="s2">"Structure step's extended XYZ output carries them as REF_forces, "</span>
+                <span class="s2">"and as the property gradients#Energy#&lt;model&gt;."</span>
+            <span class="p">),</span>
+        <span class="p">},</span>
+        <span class="s2">"stress"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"default"</span><span class="p">:</span> <span class="s2">"yes"</span><span class="p">,</span>
+            <span class="s2">"kind"</span><span class="p">:</span> <span class="s2">"boolean"</span><span class="p">,</span>
+            <span class="s2">"default_units"</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"enumeration"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"yes"</span><span class="p">,</span> <span class="s2">"no"</span><span class="p">),</span>
+            <span class="s2">"format_string"</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"description"</span><span class="p">:</span> <span class="s2">"Calculate the stress (periodic systems):"</span><span class="p">,</span>
+            <span class="s2">"help_text"</span><span class="p">:</span> <span class="p">(</span>
+                <span class="s2">"Whether to also calculate the stress tensor for periodic "</span>
+                <span class="s2">"systems. Ignored for molecular systems."</span>
+            <span class="p">),</span>
+        <span class="p">},</span>
+        <span class="c1"># ------------------------------------------------------------------ #</span>
+        <span class="c1"># Results</span>
+        <span class="c1"># ------------------------------------------------------------------ #</span>
+        <span class="s2">"results"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"default"</span><span class="p">:</span> <span class="p">{},</span>
+            <span class="s2">"kind"</span><span class="p">:</span> <span class="s2">"dictionary"</span><span class="p">,</span>
+            <span class="s2">"default_units"</span><span class="p">:</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">"enumeration"</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">(),</span>
+            <span class="s2">"format_string"</span><span class="p">:</span> <span class="s2">""</span><span class="p">,</span>
+            <span class="s2">"description"</span><span class="p">:</span> <span class="s2">"results"</span><span class="p">,</span>
+            <span class="s2">"help_text"</span><span class="p">:</span> <span class="s2">"The results to save to variables or in tables."</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">defaults</span><span class="o">=</span><span class="p">{},</span> <span class="n">data</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Initialize the parameters, by default with the parameters defined above</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        defaults: dict</span>
+<span class="sd">            A dictionary of parameters to initialize. The parameters</span>
+<span class="sd">            above are used first and any given will override/add to them.</span>
+<span class="sd">        data: dict</span>
+<span class="sd">            A dictionary of keys and a subdictionary with value and units</span>
+<span class="sd">            for updating the current, default values.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        None</span>
+<span class="sd">        """</span>
+
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"EnergyParameters.__init__"</span><span class="p">)</span>
+
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">defaults</span><span class="o">=</span><span class="p">{</span><span class="o">**</span><span class="n">EnergyParameters</span><span class="o">.</span><span class="n">parameters</span><span class="p">,</span> <span class="o">**</span><span class="n">defaults</span><span class="p">},</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span>
+        <span class="p">)</span></div>
+
+</pre></div>
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">SEAMM Energy Plug-in 2026.9.19 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">energy_step.energy_parameters</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2026, Molecular Sciences Software Institute (MolSSI).
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>
