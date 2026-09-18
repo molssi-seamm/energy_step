@@ -12,80 +12,109 @@ logger = logging.getLogger(__name__)
 
 class EnergyParameters(seamm.Parameters):
     """
-    The control parameters for Energy.
+    The control parameters for the Energy step.
 
-    The developer will add a dictionary of Parameters to this class.
-    The keys are parameters for the current plugin, which themselves
-    might be dictionaries.
-
-    You need to replace the "time" example below with one or more
-    definitions of the control parameters for your plugin and application.
-
-    Attributes
-    ----------
-    parameters : {"kind", "default", "default_units", "enumeration",
-                  "format_string", description", help_text"}
-        A dictionary containing the parameters for the current step.
-        Each key of the dictionary is a dictionary that contains the
-        the following keys: kind, default, default_units, enumeration,
-        format_string, description and help text.
-
-    parameters["kind"]: custom
-        Specifies the kind of a variable. While the "kind" of a variable might
-        be a numeric value, it may still have enumerated custom values
-        meaningful to the user. For instance, if the parameter is
-        a convergence criterion for an optimizer, custom values like "normal",
-        "precise", etc, might be adequate. In addition, any
-        parameter can be set to a variable of expression, indicated by having
-        "$" as the first character in the field. For example, $OPTIMIZER_CONV.
-
-    parameters["default"] : "integer" or "float" or "string" or "boolean" or
-        "enum" The default value of the parameter, used to reset it.
-
-    parameters["default_units"] : str
-        The default units, used for resetting the value.
-
-    parameters["enumeration"]: tuple
-        A tuple of enumerated values.
-
-    parameters["format_string"]: str
-        A format string for "pretty" output.
-
-    parameters["description"]: str
-        A short string used as a prompt in the GUI.
-
-    parameters["help_text"]: tuple
-        A longer string to display as help for the user.
+    The step evaluates the energy (and optionally the gradients and, for periodic
+    systems, the stress) of one or many structures with the Model Chemistry
+    published upstream, driving the program as a resident MDI engine so that
+    hundreds of structures cost one engine start-up.
 
     See Also
     --------
-    Energy, TkEnergy, Energy
-    EnergyParameters, EnergyStep
-
-    Examples
-    --------
-    parameters = {
-        "time": {
-            "default": 100.0,
-            "kind": "float",
-            "default_units": "ps",
-            "enumeration": tuple(),
-            "format_string": ".1f",
-            "description": "Simulation time:",
-            "help_text": ("The time to simulate in the dynamics run.")
-        },
-    }
+    Energy, TkEnergy, EnergyParameters, EnergyStep
     """
 
     parameters = {
-        "time": {
-            "default": 100.0,
-            "kind": "float",
-            "default_units": "ps",
+        # ------------------------------------------------------------------ #
+        # Input: which structure(s) to evaluate
+        # ------------------------------------------------------------------ #
+        "structure": {
+            "default": "current",
+            "kind": "string",
+            "default_units": "",
+            "enumeration": ("current",),
+            "format_string": "",
+            "description": "Structure:",
+            "help_text": (
+                "The structure(s) to evaluate: 'current' for the current system, "
+                "a system name, or a variable ($name) holding a list of "
+                "configurations."
+            ),
+        },
+        "structure configurations": {
+            "default": "current",
+            "kind": "string",
+            "default_units": "",
+            "enumeration": (
+                "current",
+                "all",
+                "last",
+                "first",
+                "name is",
+                "name matches",
+                "name regexp",
+            ),
+            "format_string": "",
+            "description": "using configurations:",
+            "help_text": (
+                "Which configuration(s) of the system to evaluate. 'all' evaluates "
+                "every configuration in the system, e.g. the ensemble written by "
+                "the Normal Mode Sampling, Dimer Builder or Extract Clusters "
+                "steps. Ignored when the structure is a variable holding a list of "
+                "configurations (all of them are used)."
+            ),
+        },
+        "structure configuration name": {
+            "default": "",
+            "kind": "string",
+            "default_units": "",
             "enumeration": tuple(),
-            "format_string": ".1f",
-            "description": "Simulation time:",
-            "help_text": ("The time to simulate in the dynamics run."),
+            "format_string": "",
+            "description": "matching:",
+            "help_text": (
+                "The configuration name or pattern, used with 'name is', 'name "
+                "matches', or 'name regexp'."
+            ),
+        },
+        # ------------------------------------------------------------------ #
+        # What to compute
+        # ------------------------------------------------------------------ #
+        "gradients": {
+            "default": "yes",
+            "kind": "boolean",
+            "default_units": "",
+            "enumeration": ("yes", "no"),
+            "format_string": "",
+            "description": "Calculate the gradients (forces):",
+            "help_text": (
+                "Whether to also calculate the gradients on the atoms. They are "
+                "stored on the atoms of each configuration (so e.g. the extended "
+                "XYZ writer emits them as forces) and as a property."
+            ),
+        },
+        "stress": {
+            "default": "yes",
+            "kind": "boolean",
+            "default_units": "",
+            "enumeration": ("yes", "no"),
+            "format_string": "",
+            "description": "Calculate the stress (periodic systems):",
+            "help_text": (
+                "Whether to also calculate the stress tensor for periodic "
+                "systems. Ignored for molecular systems."
+            ),
+        },
+        # ------------------------------------------------------------------ #
+        # Results
+        # ------------------------------------------------------------------ #
+        "results": {
+            "default": {},
+            "kind": "dictionary",
+            "default_units": None,
+            "enumeration": tuple(),
+            "format_string": "",
+            "description": "results",
+            "help_text": "The results to save to variables or in tables.",
         },
     }
 

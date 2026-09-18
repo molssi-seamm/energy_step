@@ -1,0 +1,4 @@
+Property,Type,Units,Description,URL
+energy#Energy#{model},float,kJ/mol,"The {model} energy of the structure.",
+gradients#Energy#{model},json,kJ/mol/Å,"The {model} gradients on the atoms, dE/dx, one row per atom.",
+stress#Energy#{model},json,GPa,"The {model} stress tensor (3x3, pressure sign convention).",

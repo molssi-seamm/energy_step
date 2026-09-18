@@ -30,7 +30,8 @@ SEAMM Energy Plug-in
    :target: https://pypi.python.org/pypi/energy_step
    :alt: PyPi VERSION
 
-A SEAMM plug-in for A SEAMM plug-in for calculating the energy and forces for many structures, using MDI.
+A SEAMM plug-in for calculating the energy and forces of one or many structures with the
+current Model Chemistry, driven as a resident MDI engine.
 
 * Free software: BSD-3-Clause
 * Documentation: https://molssi-seamm.github.io/energy_step/index.html
@@ -39,7 +40,23 @@ A SEAMM plug-in for A SEAMM plug-in for calculating the energy and forces for ma
 Features
 --------
 
-* Please edit this section!
+* Evaluates the energy, gradients (forces) and, for periodic systems, the stress of
+  the current configuration, every configuration of a system, or a selection by name.
+* Uses whatever Model Chemistry precedes it in the flowchart -- a machine-learned force
+  field from the `xnn plug-in`_, MOPAC, xTB, ORCA, ... -- provided it can be driven as
+  an MDI engine.
+* Starts the program once and feeds it the structures over the warm MDI connection, so
+  labelling hundreds or thousands of structures (e.g. the ensembles from the Normal Mode
+  Sampling, Dimer Builder or Extract Clusters steps) costs one start-up: ~14 ms per water
+  molecule with an xnn MACE model on a laptop CPU.
+* Stores the results on each configuration -- ``energy#Energy#<model>``,
+  ``gradients#Energy#<model>``, ``stress#Energy#<model>`` -- and the gradients on the
+  atoms, so the Write Structure step's extended XYZ output carries ``REF_energy`` and
+  ``REF_forces`` for training.
+* Writes ``energies.csv`` (energy, max/RMS force and timing per structure) in the step's
+  directory and can save any result to variables or tables.
+
+.. _xnn plug-in: https://molssi-seamm.github.io/xnn_step/index.html
 
 Acknowledgements
 ----------------

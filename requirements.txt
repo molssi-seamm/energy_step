@@ -1,3 +1,5 @@
 seamm
+seamm-mdi>=2026.9.18
 seamm-util
 seamm-widgets
+numpy

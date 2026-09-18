@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
-"""The graphical part of a Energy step"""
+"""The graphical part of an Energy step"""
 
 import pprint  # noqa: F401
 import tkinter as tk
+import tkinter.ttk as ttk
 
 import energy_step  # noqa: F401
 import seamm
@@ -13,7 +14,7 @@ import seamm_widgets as sw
 
 class TkEnergy(seamm.TkNode):
     """
-    The graphical part of a Energy step in a flowchart.
+    The graphical part of an Energy step in a flowchart.
 
     Attributes
     ----------
@@ -21,30 +22,17 @@ class TkEnergy(seamm.TkNode):
         The flowchart that we belong to.
     node : Node = None
         The corresponding node of the non-graphical flowchart
-    namespace : str
-        The namespace of the current step.
-    tk_subflowchart : TkFlowchart
-        A graphical Flowchart representing a subflowchart
     canvas: tkCanvas = None
         The Tk Canvas to draw on
     dialog : Dialog
         The Pmw dialog object
-    x : int = None
-        The x-coordinate of the center of the picture of the node
-    y : int = None
-        The y-coordinate of the center of the picture of the node
-    w : int = 200
-        The width in pixels of the picture of the node
-    h : int = 50
-        The height in pixels of the picture of the node
     self[widget] : dict
         A dictionary of tk widgets built using the information
-        contained in Energy_parameters.py
+        contained in energy_parameters.py
 
     See Also
     --------
-    Energy, TkEnergy,
-    EnergyParameters,
+    Energy, TkEnergy, EnergyParameters
     """
 
     def __init__(
@@ -57,32 +45,7 @@ class TkEnergy(seamm.TkNode):
         w=200,
         h=50,
     ):
-        """
-        Initialize a graphical node.
-
-        Parameters
-        ----------
-        tk_flowchart: Tk_Flowchart
-            The graphical flowchart that we are in.
-        node: Node
-            The non-graphical node for this step.
-        namespace: str
-            The stevedore namespace for finding sub-nodes.
-        canvas: Canvas
-           The Tk canvas to draw on.
-        x: float
-            The x position of the nodes center on the canvas.
-        y: float
-            The y position of the nodes cetner on the canvas.
-        w: float
-            The nodes graphical width, in pixels.
-        h: float
-            The nodes graphical height, in pixels.
-
-        Returns
-        -------
-        None
-        """
+        """Initialize a graphical node."""
         self.dialog = None
 
         super().__init__(
@@ -96,171 +59,116 @@ class TkEnergy(seamm.TkNode):
         )
 
     def create_dialog(self):
-        """
-        Create the dialog. A set of widgets will be chosen by default
-        based on what is specified in the Energy_parameters
-        module.
+        """Create the dialog, with a Parameters tab and the standard Results tab."""
+        super().create_dialog(title="Energy", widget="notebook", results_tab=True)
 
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        See Also
-        --------
-        TkEnergy.reset_dialog
-        """
-
-        frame = super().create_dialog(title="Energy")
         # Shortcut for parameters
         P = self.node.parameters
 
-        # Then create the widgets
-        for key in P:
-            self[key] = P[key].widget(frame)
+        frame = self["parameters frame"] = ttk.LabelFrame(
+            self["frame"],
+            borderwidth=4,
+            relief="sunken",
+            text="Energy Parameters",
+            labelanchor="n",
+            padding=10,
+        )
 
-        # and lay them out
+        for key in P:
+            if key not in ("results",):
+                self[key] = P[key].widget(frame)
+
+        # Shown when no Model Chemistry step precedes this one -- it supplies the
+        # method whose energy is evaluated, so it is required.
+        self["model chemistry note"] = ttk.Label(
+            frame,
+            text=(
+                "Add a Model Chemistry step before this step: it defines the "
+                "method (e.g. an xnn MLFF model, MOPAC PM6-ORG, or an ORCA DFT "
+                "model) whose energy and forces are calculated here. The method "
+                "must be one that can be driven as an MDI engine."
+            ),
+            foreground="red",
+            wraplength=500,
+            justify=tk.LEFT,
+        )
+
+        # Comboboxes whose value changes the layout re-lay out the dialog.
+        for key in ("structure configurations",):
+            self[key].combobox.bind("<<ComboboxSelected>>", self.reset_dialog)
+            self[key].combobox.bind("<Return>", self.reset_dialog)
+            self[key].combobox.bind("<FocusOut>", self.reset_dialog)
+
         self.reset_dialog()
 
     def reset_dialog(self, widget=None):
-        """Layout the widgets in the dialog.
-
-        The widgets are chosen by default from the information in
-        Energy_parameter.
-
-        This function simply lays them out row by row with
-        aligned labels. You may wish a more complicated layout that
-        is controlled by values of some of the control parameters.
-        If so, edit or override this method
-
-        Parameters
-        ----------
-        widget : Tk Widget = None
-
-        Returns
-        -------
-        None
-
-        See Also
-        --------
-        TkEnergy.create_dialog
-        """
-
-        # Remove any widgets previously packed
+        """Lay out the parameters frame in the Parameters tab."""
         frame = self["frame"]
         for slave in frame.grid_slaves():
             slave.grid_forget()
 
-        # Shortcut for parameters
-        P = self.node.parameters
+        self["parameters frame"].grid(row=0, column=0, sticky=tk.EW, pady=10)
+        frame.columnconfigure(0, weight=1)
 
-        # keep track of the row in a variable, so that the layout is flexible
-        # if e.g. rows are skipped to control such as "method" here
+        self.reset_parameters_frame()
+        return 1
+
+    def reset_parameters_frame(self):
+        """Lay out the control parameters for the current choices."""
+        selector = self["structure configurations"].get()
+
+        frame = self["parameters frame"]
+        for slave in frame.grid_slaves():
+            slave.grid_forget()
+
         row = 0
         widgets = []
-        for key in P:
-            self[key].grid(row=row, column=0, sticky=tk.EW)
+
+        def add(key):
+            nonlocal row
+            self[key].grid(row=row, column=0, columnspan=2, sticky=tk.EW)
             widgets.append(self[key])
             row += 1
 
-        # Align the labels
+        # Remind the user to supply a Model Chemistry, if none is upstream.
+        if not self._upstream_has_model_chemistry():
+            self["model chemistry note"].grid(
+                row=row, column=0, columnspan=2, sticky=tk.W, pady=(0, 6)
+            )
+            row += 1
+
+        # Input: the structure(s).
+        add("structure")
+        add("structure configurations")
+        if selector in ("name is", "name matches", "name regexp"):
+            add("structure configuration name")
+
+        # What to compute.
+        add("gradients")
+        add("stress")
+
         sw.align_labels(widgets, sticky=tk.E)
+        frame.columnconfigure(1, weight=1)
+
+    def _upstream_has_model_chemistry(self):
+        """True if a Model Chemistry step precedes this one in the flowchart.
+
+        Uses the shared ``previous_nodes()`` helper and checks the Python type by
+        name + module (no import dependency on model_chemistry_step). On any error
+        (e.g. the node is not yet linked into the flowchart) returns False, so the
+        reminder is shown -- the safe default, since a Model Chemistry is required.
+        """
+        try:
+            return any(
+                type(node).__name__ == "ModelChemistry"
+                and type(node).__module__.startswith("model_chemistry_step")
+                for node in self.previous_nodes()
+            )
+        except Exception:
+            return False
 
     def right_click(self, event):
-        """
-        Handles the right click event on the node.
-
-        Parameters
-        ----------
-        event : Tk Event
-
-        Returns
-        -------
-        None
-
-        See Also
-        --------
-        TkEnergy.edit
-        """
-
+        """Handle a right-click: add the Edit... item and post the menu."""
         super().right_click(event)
         self.popup_menu.add_command(label="Edit..", command=self.edit)
-
         self.popup_menu.tk_popup(event.x_root, event.y_root, 0)
-
-    def edit(self):
-        """Present a dialog for editing the Energy input
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        See Also
-        --------
-        TkEnergy.right_click
-        """
-
-        if self.dialog is None:
-            self.create_dialog()
-
-        self.dialog.activate(geometry="centerscreenfirst")
-
-    def handle_dialog(self, result):
-        """Handle the closing of the edit dialog
-
-        What to do depends on the button used to close the dialog. If
-        the user closes it by clicking the "x" of the dialog window,
-        None is returned, which we take as equivalent to cancel.
-
-        Parameters
-        ----------
-        result : None or str
-            The value of this variable depends on what the button
-            the user clicked.
-
-        Returns
-        -------
-        None
-        """
-
-        if result is None or result == "Cancel":
-            self.dialog.deactivate(result)
-            return
-
-        if result == "Help":
-            # display help!!!
-            return
-
-        if result != "OK":
-            self.dialog.deactivate(result)
-            raise RuntimeError(f"Don't recognize dialog result '{result}'")
-
-        self.dialog.deactivate(result)
-        # Shortcut for parameters
-        P = self.node.parameters
-
-        # Get the values for all the widgets. This may be overkill, but
-        # it is easy! You can sort out what it all means later, or
-        # be a bit more selective.
-        for key in P:
-            P[key].set_from_widget()
-
-    def handle_help(self):
-        """Shows the help to the user when click on help button.
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-        """
-        print("Help not implemented yet for Energy!")

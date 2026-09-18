@@ -12,6 +12,7 @@ from energy_step.energy import Energy  # noqa: F401, E501
 from energy_step.energy_parameters import EnergyParameters  # noqa: F401, E501
 from energy_step.energy_step import EnergyStep  # noqa: F401, E501
 from energy_step.tk_energy import TkEnergy  # noqa: F401, E501
+from energy_step.metadata import metadata  # noqa: F401
 
 # Handle versioneer
 from ._version import get_versions

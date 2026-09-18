@@ -9,7 +9,7 @@ dependencies:
   - pip
 
   # SEAMM
-  - seamm
+  - numpy
 
   # Testing
   - black
@@ -23,6 +23,9 @@ dependencies:
   
   # Pip-only installs
   - pip:
+    # SEAMM (pure Python; PyPI is never behind, conda-forge can lag)
+    - seamm
+    - seamm-mdi
     # Documentation
     - rinohtype
     - sphinx-rtd-theme
