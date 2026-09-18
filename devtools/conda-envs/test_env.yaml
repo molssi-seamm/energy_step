@@ -8,7 +8,11 @@ dependencies:
   - python
   - pip
 
-  # SEAMM
+  # SEAMM (compiled deps such as openbabel/rdkit come with molsystem from conda)
+  - seamm
+  # seamm.Node still uses the bibtexparser 1.x API (loads)
+  - bibtexparser<2
+  - molsystem
   - numpy
 
   # Testing
@@ -20,11 +24,9 @@ dependencies:
 
   # Documentation
   - pygments
-  
-  # Pip-only installs
+
+  # Pip-only installs (pure Python; PyPI has a release within minutes of the tag)
   - pip:
-    # SEAMM (pure Python; PyPI is never behind, conda-forge can lag)
-    - seamm
     - seamm-mdi
     # Documentation
     - rinohtype
