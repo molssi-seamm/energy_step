@@ -2,6 +2,18 @@
 History
 =======
 
+2026.9.19 (2026-09-19)
+----------------------
+
+* Structure selection now uses SEAMM's standard block (systems and configurations,
+  by name or from a variable), so the Energy step can e.g. evaluate all
+  configurations of every system, or the systems matching a pattern.
+* The output states exactly what was stored on each configuration (energy,
+  gradients, stress) and mentions forces only when they were calculated; the CSV
+  summary is secondary.
+* Requires seamm 2026.9.18.1 or later.
+
+
 2026.9.18 (2026-09-18)
 ----------------------
 

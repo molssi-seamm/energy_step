@@ -26,74 +26,6 @@ def _conf(name, numbers=(8, 1, 1), charge=0, multiplicity=1, periodicity=0):
     )
 
 
-@pytest.fixture()
-def system():
-    confs = [_conf("water 1"), _conf("water 2"), _conf("dimer 1", (8, 1, 1, 8, 1, 1))]
-    return SimpleNamespace(configurations=confs, configuration=confs[1])
-
-
-# --------------------------------------------------------------------------- #
-# _select_configurations / _structure_pool
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize(
-    "how, name, expected",
-    [
-        ("all", "", ["water 1", "water 2", "dimer 1"]),
-        ("first", "", ["water 1"]),
-        ("last", "", ["dimer 1"]),
-        ("name is", "water 2", ["water 2"]),
-        ("name matches", "water*", ["water 1", "water 2"]),
-        ("name regexp", r"^dimer \d", ["dimer 1"]),
-    ],
-)
-def test_select_configurations(node, system, how, name, expected):
-    result = node._select_configurations(system, how, name)
-    assert [c.name for c in result] == expected
-
-
-def test_select_configurations_unknown_selector(node, system):
-    with pytest.raises(ValueError):
-        node._select_configurations(system, "bogus", "")
-
-
-def test_structure_pool_current(node, system):
-    system_db = SimpleNamespace(system=system, get_system=lambda n: system)
-    P = {
-        "structure": "current",
-        "structure configurations": "current",
-        "structure configuration name": "",
-    }
-    assert [c.name for c in node._structure_pool(P, system_db)] == ["water 2"]
-
-
-def test_structure_pool_named_system_all(node, system):
-    seen = {}
-
-    def get_system(name):
-        seen["name"] = name
-        return system
-
-    system_db = SimpleNamespace(system=None, get_system=get_system)
-    P = {
-        "structure": "ensemble",
-        "structure configurations": "all",
-        "structure configuration name": "",
-    }
-    result = node._structure_pool(P, system_db)
-    assert seen["name"] == "ensemble"
-    assert len(result) == 3
-
-
-def test_structure_pool_list_variable(node):
-    confs = [_conf("a"), _conf("b")]
-    P = {
-        "structure": confs,
-        "structure configurations": "first",  # ignored for a list
-        "structure configuration name": "",
-    }
-    assert node._structure_pool(P, None) == confs
-
-
 # --------------------------------------------------------------------------- #
 # Grouping into engine sessions
 # --------------------------------------------------------------------------- #
@@ -150,25 +82,28 @@ def test_truthy(node, value, expected):
 # --------------------------------------------------------------------------- #
 def test_description_text_mentions_gradients(node):
     P = {
-        "structure": "current",
-        "structure configurations": "all",
-        "structure configuration name": "",
+        "source systems": "current",
+        "source system name": "",
+        "source configurations": "all",
+        "source configuration name": "",
         "gradients": "yes",
         "stress": "no",
     }
-    text = node.description_text(P)
+    text = " ".join(node.description_text(P).split())  # undo the line wrapping
     assert "energy and gradients" in text
-    assert "every configuration" in text
+    assert "all configurations of the current system" in text
+    assert "REF_forces" in text
 
 
 def test_description_text_energy_only(node):
     P = {
-        "structure": "clusters",
-        "structure configurations": "name matches",
-        "structure configuration name": "tetramer*",
+        "source systems": "name is",
+        "source system name": "clusters",
+        "source configurations": "name matches",
+        "source configuration name": "tetramer*",
         "gradients": "no",
         "stress": "no",
     }
-    text = node.description_text(P)
-    assert "gradients" not in text
+    text = " ".join(node.description_text(P).split())
+    assert "gradients" not in text and "REF_forces" not in text
     assert "clusters" in text and "tetramer*" in text

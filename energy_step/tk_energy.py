@@ -74,9 +74,11 @@ class TkEnergy(seamm.TkNode):
             padding=10,
         )
 
-        for key in P:
-            if key not in ("results",):
-                self[key] = P[key].widget(frame)
+        # The standard structure-selection widgets (bound to reset_dialog), then
+        # this step's own.
+        self.create_structure_selection_widgets(frame)
+        for key in ("gradients", "stress"):
+            self[key] = P[key].widget(frame)
 
         # Shown when no Model Chemistry step precedes this one -- it supplies the
         # method whose energy is evaluated, so it is required.
@@ -92,12 +94,6 @@ class TkEnergy(seamm.TkNode):
             wraplength=500,
             justify=tk.LEFT,
         )
-
-        # Comboboxes whose value changes the layout re-lay out the dialog.
-        for key in ("structure configurations",):
-            self[key].combobox.bind("<<ComboboxSelected>>", self.reset_dialog)
-            self[key].combobox.bind("<Return>", self.reset_dialog)
-            self[key].combobox.bind("<FocusOut>", self.reset_dialog)
 
         self.reset_dialog()
 
@@ -115,8 +111,6 @@ class TkEnergy(seamm.TkNode):
 
     def reset_parameters_frame(self):
         """Lay out the control parameters for the current choices."""
-        selector = self["structure configurations"].get()
-
         frame = self["parameters frame"]
         for slave in frame.grid_slaves():
             slave.grid_forget()
@@ -137,11 +131,10 @@ class TkEnergy(seamm.TkNode):
             )
             row += 1
 
-        # Input: the structure(s).
-        add("structure")
-        add("structure configurations")
-        if selector in ("name is", "name matches", "name regexp"):
-            add("structure configuration name")
+        # Input: the structure(s), via the standard selection widgets (the name
+        # fields appear beside their choice only when a name-based choice is made).
+        row, selection_widgets = self.layout_structure_selection(row=row)
+        widgets.extend(selection_widgets)
 
         # What to compute.
         add("gradients")
@@ -149,6 +142,13 @@ class TkEnergy(seamm.TkNode):
 
         sw.align_labels(widgets, sticky=tk.E)
         frame.columnconfigure(1, weight=1)
+
+    def edit(self):
+        """Present the dialog, re-laying it out first so the reminder about a
+        Model Chemistry step reflects the flowchart as it is now connected."""
+        if self.dialog is not None:
+            self.reset_dialog()
+        super().edit()
 
     def _upstream_has_model_chemistry(self):
         """True if a Model Chemistry step precedes this one in the flowchart.

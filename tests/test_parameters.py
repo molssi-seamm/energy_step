@@ -8,8 +8,8 @@ import energy_step
 def test_parameter_defaults():
     P = energy_step.EnergyParameters()
     values = P.values_to_dict()
-    assert values["structure"] == "current"
-    assert values["structure configurations"] == "current"
+    assert values["source systems"] == "current"
+    assert values["source configurations"] == "current"
     assert values["gradients"] == "yes"
     assert values["stress"] == "yes"
 

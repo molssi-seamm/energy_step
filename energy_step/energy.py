@@ -137,31 +137,24 @@ class Energy(seamm.Node):
         if self._truthy(P["stress"]):
             what += ", plus the stress for periodic systems,"
 
-        structure = P["structure"]
-        how = P["structure configurations"]
-        if isinstance(structure, str) and structure.lower() in ("", "current"):
-            where = "the current system"
-        else:
-            where = f"the system '{structure}'"
-        if how == "current":
-            which = f"the current configuration of {where}"
-        elif how == "all":
-            which = f"every configuration of {where}"
-        elif how in ("first", "last"):
-            which = f"the {how} configuration of {where}"
-        else:
-            which = (
-                f"the configurations of {where} whose {how} "
-                f"'{P['structure configuration name']}'"
-            )
+        which = seamm.standard_parameters.structure_selection_description(P)
+        # "The current configuration ... will be used." -> "... of the current ..."
+        which = which[0].lower() + which[1:]
+        if which.endswith(" will be used."):
+            which = which[: -len(" will be used.")]
 
         if self._truthy(P["gradients"]):
             stored = (
-                "The energy and gradients will be stored as properties on each "
-                "configuration, and the gradients also on the atoms."
+                "The energy and gradients will be stored on each configuration as "
+                "properties, and the gradients also on the atoms, so a following "
+                "Write Structure step can write them out, e.g. as an extended XYZ "
+                "file with REF_energy and REF_forces."
             )
         else:
-            stored = "The energy will be stored as a property on each configuration."
+            stored = (
+                "The energy will be stored on each configuration as a property, so "
+                "a following Write Structure step can write it out."
+            )
         text = (
             f"Calculate {what} of {which}, using the model chemistry defined "
             f"earlier in the flowchart driven as a resident MDI engine. {stored}"
@@ -195,8 +188,7 @@ class Energy(seamm.Node):
         mc = self._model_chemistry()
         self.model = mc["level"]
 
-        system_db = self.get_variable("_system_db")
-        configurations = self._structure_pool(P, system_db)
+        configurations = self.select_configurations(P)
         if len(configurations) == 0:
             raise ValueError("The Energy step found no configurations to evaluate.")
 
@@ -398,51 +390,6 @@ class Energy(seamm.Node):
         engine.start()
         return engine
 
-    # ------------------------------------------------------------------ #
-    # Structure selection
-    # ------------------------------------------------------------------ #
-
-    def _structure_pool(self, P, system_db):
-        """Resolve the 'structure' parameters to a list of configurations."""
-        spec = P["structure"]
-        if isinstance(spec, (list, tuple)):
-            return list(spec)
-
-        if isinstance(spec, str) and (spec == "" or spec.lower() == "current"):
-            system = system_db.system
-        else:
-            system = system_db.get_system(spec)
-
-        how = P["structure configurations"]
-        name = P["structure configuration name"]
-        if how == "current":
-            return [system.configuration]
-        return self._select_configurations(system, how, name)
-
-    @staticmethod
-    def _select_configurations(system, how, name):
-        """Pick configurations from a system, mirroring the Loop step."""
-        configurations = system.configurations
-        if how == "all":
-            return list(configurations)
-        elif how == "last":
-            return [configurations[-1]]
-        elif how == "first":
-            return [configurations[0]]
-        elif how == "name is":
-            return [c for c in configurations if c.name == name]
-        elif how == "name matches":
-            import fnmatch
-
-            return [c for c in configurations if fnmatch.fnmatch(c.name, name)]
-        elif how == "name regexp":
-            import re
-
-            pattern = re.compile(name)
-            return [c for c in configurations if pattern.search(c.name)]
-        else:
-            raise ValueError(f"Unknown configuration selector '{how}'.")
-
     @staticmethod
     def _topology_key(configuration):
         """What must stay fixed for one MDI engine session."""
@@ -504,6 +451,19 @@ class Energy(seamm.Node):
                     row.append(f"{data['elapsed time']:.3f}")
                     writer.writerow(row)
 
+        stored = [f"the energy as the property 'energy#Energy#{self.model}'"]
+        if have_forces:
+            stored.append(
+                "the gradients on the atoms and as the property "
+                f"'gradients#Energy#{self.model}'"
+            )
+        if have_stress:
+            stored.append(f"the stress as the property 'stress#Energy#{self.model}'")
+        if len(stored) == 1:
+            stored_text = stored[0]
+        else:
+            stored_text = ", ".join(stored[:-1]) + " and " + stored[-1]
+
         if n == 1:
             _, configuration, data = rows[0]
             text = (
@@ -534,14 +494,6 @@ class Energy(seamm.Node):
                 fmax = max(data["maximum force"] for _, _, data in rows)
                 text = f"The largest force component is {fmax:.4f} {_G_UNITS}."
                 printer.important(__(text, indent=4 * " "))
-            if have_stress:
-                printer.important(
-                    __(
-                        "The stress tensors were stored as properties on the "
-                        "periodic configurations.",
-                        indent=4 * " ",
-                    )
-                )
 
             if n <= _MAX_TABLE_ROWS:
                 printer.important("")
@@ -561,12 +513,20 @@ class Energy(seamm.Node):
                 if have_forces:
                     units += f" {_G_UNITS:>12s}"
                 printer.important(units)
-            else:
-                printer.important(
-                    __(
-                        "The per-structure energies and forces are in "
-                        "energies.csv in this step's directory.",
-                        indent=4 * " ",
-                    )
+                printer.important("")
+
+        text = (
+            f"Stored on each configuration: {stored_text}. A Write Structure step "
+            "can write these out, e.g. as extended XYZ with REF_energy"
+            + (" and REF_forces." if have_forces else ".")
+        )
+        printer.important(__(text, indent=4 * " "))
+        if n > 1:
+            printer.important(
+                __(
+                    "A per-structure summary (energy"
+                    + (", maximum and RMS force" if have_forces else "")
+                    + ", time) is in energies.csv in this step's directory.",
+                    indent=4 * " ",
                 )
-        printer.important("")
+            )

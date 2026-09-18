@@ -26,56 +26,10 @@ class EnergyParameters(seamm.Parameters):
 
     parameters = {
         # ------------------------------------------------------------------ #
-        # Input: which structure(s) to evaluate
+        # Input: which structure(s) to evaluate -- SEAMM's standard block
+        # (source systems / source configurations, by name or from a variable).
         # ------------------------------------------------------------------ #
-        "structure": {
-            "default": "current",
-            "kind": "string",
-            "default_units": "",
-            "enumeration": ("current",),
-            "format_string": "",
-            "description": "Structure:",
-            "help_text": (
-                "The structure(s) to evaluate: 'current' for the current system, "
-                "a system name, or a variable ($name) holding a list of "
-                "configurations."
-            ),
-        },
-        "structure configurations": {
-            "default": "current",
-            "kind": "string",
-            "default_units": "",
-            "enumeration": (
-                "current",
-                "all",
-                "last",
-                "first",
-                "name is",
-                "name matches",
-                "name regexp",
-            ),
-            "format_string": "",
-            "description": "using configurations:",
-            "help_text": (
-                "Which configuration(s) of the system to evaluate. 'all' evaluates "
-                "every configuration in the system, e.g. the ensemble written by "
-                "the Normal Mode Sampling, Dimer Builder or Extract Clusters "
-                "steps. Ignored when the structure is a variable holding a list of "
-                "configurations (all of them are used)."
-            ),
-        },
-        "structure configuration name": {
-            "default": "",
-            "kind": "string",
-            "default_units": "",
-            "enumeration": tuple(),
-            "format_string": "",
-            "description": "matching:",
-            "help_text": (
-                "The configuration name or pattern, used with 'name is', 'name "
-                "matches', or 'name regexp'."
-            ),
-        },
+        **seamm.standard_parameters.structure_selection_parameters,
         # ------------------------------------------------------------------ #
         # What to compute
         # ------------------------------------------------------------------ #
@@ -87,9 +41,10 @@ class EnergyParameters(seamm.Parameters):
             "format_string": "",
             "description": "Calculate the gradients (forces):",
             "help_text": (
-                "Whether to also calculate the gradients on the atoms. They are "
-                "stored on the atoms of each configuration (so e.g. the extended "
-                "XYZ writer emits them as forces) and as a property."
+                "Whether to also calculate the gradients (forces) on the atoms. They "
+                "are stored on the atoms of each configuration, so e.g. the Write "
+                "Structure step's extended XYZ output carries them as REF_forces, "
+                "and as the property gradients#Energy#<model>."
             ),
         },
         "stress": {
