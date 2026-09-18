@@ -11,6 +11,8 @@ History
 * The output states exactly what was stored on each configuration (energy,
   gradients, stress) and mentions forces only when they were calculated; the CSV
   summary is secondary.
+* The output names the model file used when the provider reports one, e.g.
+  ``personal:xnn/water.pt``, so a personal model shadowing a machine one is visible.
 * Requires seamm 2026.9.18.1 or later.
 
 

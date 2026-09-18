@@ -187,6 +187,14 @@ class Energy(seamm.Node):
 
         mc = self._model_chemistry()
         self.model = mc["level"]
+        # Say which model file is used when the provider reports one (an MLFF
+        # checkpoint may come from a personal or a machine-wide directory).
+        source = mc.get("options", {}).get("source")
+        if source:
+            printer.important(
+                __(f"Using the model {mc['level']} from {source}.", indent=4 * " ")
+            )
+            printer.important("")
 
         configurations = self.select_configurations(P)
         if len(configurations) == 0:
