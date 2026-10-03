@@ -52,11 +52,18 @@ Over MDI
     start-up (and, for an MLFF, loading the model) is paid once.
 
 As separate calculations
-    For ORCA, which runs once per structure anyway, and for any model chemistry when the
-    job's tasks go to a cluster queue, each structure is a separate calculation. They run
+    For ORCA, which runs once per structure anyway, and for any program that can run this
+    way (ORCA, MOPAC) when the job's tasks go to a cluster queue, each structure is a
+    separate calculation. MLFFs and xTB always use their MDI engine. They run
     concurrently on this machine or are bundled into batch jobs on the cluster, and are
     kept in ``tasks/c<id>/`` in the step's directory. Running the job again in the same
     directory reuses the finished calculations.
+
+A structure that a program cannot run as a separate calculation (a periodic system for
+ORCA or MOPAC) goes to its MDI engine even when the others run as separate calculations,
+and the output then says how many went each way. If there is no engine on this machine
+(a cluster queue, with the program installed only there), that structure fails with the
+reason and the others are stored.
 
 The per-structure energies, forces and timings are written to ``energies.csv`` in the
 step's directory; up to 25 structures are also tabled in the step output. If some
