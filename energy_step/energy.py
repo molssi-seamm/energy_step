@@ -4,11 +4,17 @@
 
 The Energy step evaluates the energy, and optionally the gradients (forces) and
 stress, of one or many structures using the Model Chemistry published upstream
-(the ``_model_chemistry`` workspace variable), driving the program as a resident
-MDI engine via ``seamm_mdi``. The engine is started once per distinct topology
-(elements, charge, multiplicity, periodicity) and then fed the structures one
-after another over the warm connection, so labelling hundreds of structures --
-e.g. with a machine-learned force field -- costs a single engine start-up.
+(the ``_model_chemistry`` workspace variable), through ``seamm_exec``'s
+``Evaluator``, which chooses how:
+
+- over MDI: the program as a resident engine, started once per distinct topology
+  (elements, charge, multiplicity, periodicity) and fed the structures one after
+  another over the warm connection, so labelling hundreds of structures -- e.g.
+  with a machine-learned force field -- costs a single engine start-up;
+- as tasks: one calculation per structure, run concurrently in the local pool or
+  bundled on the job's queue (ORCA, which runs once per structure anyway, and
+  any model chemistry whose job sends its tasks to a cluster). A rerun keeps the
+  finished ones.
 
 Results are stored per configuration: the energy, gradients and stress as
 properties, and the gradients also on the atoms (so downstream writers such as
@@ -157,7 +163,8 @@ class Energy(seamm.Node):
             )
         text = (
             f"Calculate {what} of {which}, using the model chemistry defined "
-            f"earlier in the flowchart driven as a resident MDI engine. {stored}"
+            "earlier in the flowchart, driven as a resident MDI engine or run as "
+            f"separate calculations, whichever suits the program. {stored}"
         )
 
         return self.header + "\n" + __(text, indent=4 * " ").__str__()
@@ -202,50 +209,61 @@ class Energy(seamm.Node):
 
         want_gradients = self._truthy(P["gradients"])
         want_stress = self._truthy(P["stress"])
+        properties = ["energy"]
+        if want_gradients:
+            properties.append("gradients")
+        if want_stress:
+            properties.append("stress")
 
-        # Group the configurations by what the engine needs fixed for a session:
-        # atom count/elements, charge, multiplicity and periodicity. Each group
-        # gets one warm engine; the order of the configurations is preserved
-        # within a group.
-        groups = {}
-        for index, configuration in enumerate(configurations):
-            key = self._topology_key(configuration)
-            groups.setdefault(key, []).append((index, configuration))
+        from seamm_exec import Evaluator
 
         rows = []
+        failed = []
+        restored = 0
         t_start = time.perf_counter()
-        n_engines = 0
-        for key, members in groups.items():
-            n_engines += 1
-            elements, charge, multiplicity, periodicity = key
-            first = members[0][1]
-            with self._open_engine(mc, first) as engine:
-                periodic = periodicity != 0
-                if periodic and not engine.supports(">CELL"):
-                    raise ValueError(
-                        f"The model chemistry '{mc['level']}' MDI engine does not "
-                        "accept a periodic cell (>CELL), so it cannot evaluate "
-                        "periodic structures."
-                    )
-                do_stress = periodic and want_stress and engine.supports("<STRESS")
-                for index, configuration in members:
-                    t0 = time.perf_counter()
-                    data = self._evaluate(
-                        engine, configuration, want_gradients, do_stress, periodic
-                    )
-                    data["elapsed time"] = time.perf_counter() - t0
-                    data["configuration name"] = configuration.name
-                    data["model chemistry"] = mc["level"]
-
-                    self._store(configuration, data, want_gradients, do_stress)
-                    rows.append((index, configuration, data))
-
+        with Evaluator(self, mc, properties=properties, name="Energy") as evaluator:
+            members = {}
+            for index, configuration in enumerate(configurations):
+                # The configuration's id names its calculation, so a rerun in
+                # the same job directory finds it; its fingerprint protects
+                # correctness if the ids ever shift.
+                key = evaluator.submit(configuration, key=f"c{configuration.id}")
+                members[key] = (index, configuration)
+            for result in evaluator.results():
+                index, configuration = members[result.key]
+                if not result.ok:
+                    failed.append((configuration, result.reason))
+                    continue
+                if result.restored:
+                    restored += 1
+                data = {"energy": float(result.energy)}
+                if want_gradients and result.gradients is not None:
+                    gradients = np.asarray(result.gradients, dtype=float)
+                    forces = -gradients
+                    data["gradients"] = gradients.tolist()
+                    data["maximum force"] = float(np.max(np.abs(forces)))
+                    data["rms force"] = float(np.sqrt(np.mean(forces**2)))
+                do_stress = want_stress and result.stress is not None
+                if do_stress:
+                    data["stress"] = result.stress
+                data["elapsed time"] = result.elapsed
+                data["configuration name"] = configuration.name
+                data["model chemistry"] = mc["level"]
+                self._store(configuration, data, "gradients" in data, do_stress)
+                rows.append((index, configuration, data))
+            path = evaluator.path
+            n_engines = len(
+                {
+                    evaluator.topology_key(configuration)
+                    for configuration in configurations
+                }
+            )
         elapsed = time.perf_counter() - t_start
         rows.sort(key=lambda r: r[0])
 
         # Cite MDI, which makes the resident-engine evaluation possible. The
         # plug-in's own reference is added by the base class.
-        if "mdi" in self._bibliography:
+        if path == "mdi" and "mdi" in self._bibliography:
             self.references.cite(
                 raw=self._bibliography["mdi"],
                 alias="mdi",
@@ -254,39 +272,35 @@ class Energy(seamm.Node):
                 note="The MolSSI Driver Interface used to drive the engine.",
             )
 
+        if path == "mdi":
+            how = f"using {n_engines} " + (
+                "engine session" if n_engines == 1 else "engine sessions"
+            )
+        else:
+            how = f"as {len(configurations)} separate calculations"
+            if restored:
+                how += f", {restored} of them finished in an earlier run"
         self.analyze(
             P=P,
             rows=rows,
             model_chemistry=mc["level"],
             n_engines=n_engines,
+            how=how,
             elapsed=elapsed,
             directory=directory,
         )
 
+        if failed:
+            lines = "\n".join(
+                f"    {configuration.name}: {reason}"
+                for configuration, reason in failed
+            )
+            raise RuntimeError(
+                f"{len(failed)} of {len(configurations)} structures could not be "
+                f"evaluated; the others are stored:\n{lines}"
+            )
+
         return next_node
-
-    def _evaluate(self, engine, configuration, want_gradients, do_stress, periodic):
-        """Evaluate one configuration on the warm engine; returns the data dict."""
-        if periodic:
-            engine.set_cell(configuration.cell.vectors(as_array=True), units="Å")
-        xyz = configuration.atoms.get_coordinates(fractionals=False, as_array=True)
-        engine.set_coordinates(np.asarray(xyz, dtype=float), units="Å")
-
-        data = {"energy": float(engine.energy(units=_E_UNITS))}
-
-        if want_gradients:
-            forces = np.asarray(engine.forces(units=_G_UNITS), dtype=float)
-            gradients = -forces
-            data["gradients"] = gradients.tolist()
-            data["maximum force"] = float(np.max(np.abs(forces)))
-            data["rms force"] = float(np.sqrt(np.mean(forces**2)))
-
-        if do_stress:
-            data["stress"] = np.asarray(
-                engine.stress(units=_S_UNITS), dtype=float
-            ).tolist()
-
-        return data
 
     def _store(self, configuration, data, want_gradients, do_stress):
         """Store the results on the configuration and via store_results.
@@ -337,13 +351,6 @@ class Energy(seamm.Node):
                 "PM6-ORG, or an ORCA DFT model) used for the energy."
             )
         mc = self.get_variable("_model_chemistry")
-        options = mc.get("options", {}) if isinstance(mc, dict) else {}
-        if not options.get("mdi_capable", False):
-            raise ValueError(
-                f"The model chemistry '{mc.get('level', mc)}' cannot be driven "
-                "via MDI, which the Energy step requires. Choose an MDI-capable "
-                "model chemistry (e.g. an xnn MLFF model, MOPAC, xTB or ORCA)."
-            )
         return mc
 
     @staticmethod
@@ -360,43 +367,6 @@ class Energy(seamm.Node):
         method = options.get("mdi_method_arg") or mc.get("method")
         basis = options.get("mdi_basis_arg") or mc.get("basis")
         return method, basis
-
-    def _open_engine(self, mc, configuration):
-        """Start the MDI engine for ``configuration``'s topology.
-
-        Returns a started ``seamm_mdi.MDIEngine`` (a context manager).
-        """
-        from seamm_mdi import MDIEngine
-
-        options = mc.get("options", {})
-        step = self.flowchart.plugin_manager.get(mc["step"])
-        executor = self.flowchart.executor
-        seamm_options = self.global_options
-        method, basis = self._mdi_method_and_basis(mc, options)
-
-        charge = configuration.charge
-        multiplicity = configuration.spin_multiplicity
-        n_atoms = configuration.n_atoms
-
-        def build_argv(hostname, port):
-            kwargs = {
-                "method": method,
-                "port": port,
-                "hostname": hostname,
-                "charge": charge,
-                "multiplicity": multiplicity,
-                "n_atoms": n_atoms,
-            }
-            if basis is not None:
-                kwargs["basis"] = basis
-            return step.get_mdi_engine_command(executor, seamm_options, **kwargs)
-
-        elements = list(configuration.atoms.atomic_numbers)
-        engine = MDIEngine(
-            build_argv, elements=elements, name="Energy", logger=self.logger
-        )
-        engine.start()
-        return engine
 
     @staticmethod
     def _topology_key(configuration):
@@ -422,6 +392,7 @@ class Energy(seamm.Node):
         rows=None,
         model_chemistry="",
         n_engines=1,
+        how=None,
         elapsed=0.0,
         directory=None,
         indent="",
@@ -485,11 +456,13 @@ class Energy(seamm.Node):
                 )
             printer.important(__(text, indent=4 * " "))
         else:
+            if how is None:
+                how = f"using {n_engines} " + (
+                    "engine session" if n_engines == 1 else "engine sessions"
+                )
             text = (
                 f"Evaluated {n} structures with {model_chemistry} in {elapsed:.2f} s "
-                f"({1000 * elapsed / n:.1f} ms per structure) using {n_engines} "
-                + ("engine session" if n_engines == 1 else "engine sessions")
-                + "."
+                f"({1000 * elapsed / n:.1f} ms per structure) {how}."
             )
             printer.important(__(text, indent=4 * " "))
             text = (
