@@ -215,12 +215,60 @@ class Energy(seamm.Node):
         if want_stress:
             properties.append("stress")
 
+        t_start = time.perf_counter()
+        rows, failed, counts = self._evaluate_all(
+            mc, configurations, properties, want_gradients, want_stress
+        )
+        elapsed = time.perf_counter() - t_start
+        rows.sort(key=lambda r: r[0])
+
+        # Cite MDI, which makes the resident-engine evaluation possible. The
+        # plug-in's own reference is added by the base class.
+        if counts["mdi"] and "mdi" in self._bibliography:
+            self.references.cite(
+                raw=self._bibliography["mdi"],
+                alias="mdi",
+                module="energy_step",
+                level=1,
+                note="The MolSSI Driver Interface used to drive the engine.",
+            )
+
+        n_engines = counts["engines"]
+        how = self._how(counts)
+        self.analyze(
+            P=P,
+            rows=rows,
+            model_chemistry=mc["level"],
+            n_engines=n_engines,
+            how=how,
+            elapsed=elapsed,
+            directory=directory,
+        )
+
+        self._report_failures(failed, len(configurations))
+
+        return next_node
+
+    def _evaluate_all(
+        self, mc, configurations, properties, want_gradients, want_stress
+    ):
+        """Evaluate the configurations through ``seamm_exec``'s Evaluator and
+        store each result as it arrives.
+
+        Returns
+        -------
+        rows : [(index, configuration, data)]
+        failed : [(configuration, reason)]
+        counts : dict
+            ``mdi`` and ``tasks`` (structures each way), ``restored`` (tasks
+            finished in an earlier run) and ``engines`` (MDI engine sessions).
+        """
         from seamm_exec import Evaluator
 
         rows = []
         failed = []
-        restored = 0
-        t_start = time.perf_counter()
+        counts = {"mdi": 0, "tasks": 0, "restored": 0, "engines": 0}
+        topologies = set()
         with Evaluator(self, mc, properties=properties, name="Energy") as evaluator:
             members = {}
             for index, configuration in enumerate(configurations):
@@ -237,8 +285,13 @@ class Energy(seamm.Node):
                 if not result.ok:
                     failed.append((configuration, result.reason))
                     continue
-                if result.restored:
-                    restored += 1
+                if result.path == "mdi":
+                    counts["mdi"] += 1
+                    topologies.add(evaluator.topology_key(configuration))
+                else:
+                    counts["tasks"] += 1
+                    if result.restored:
+                        counts["restored"] += 1
                 data = {"energy": float(result.energy)}
                 if want_gradients and result.gradients is not None:
                     gradients = np.asarray(result.gradients, dtype=float)
@@ -254,56 +307,45 @@ class Energy(seamm.Node):
                 data["model chemistry"] = mc["level"]
                 self._store(configuration, data, "gradients" in data, do_stress)
                 rows.append((index, configuration, data))
-            path = evaluator.path
-            n_engines = len(
-                {
-                    evaluator.topology_key(configuration)
-                    for configuration in configurations
-                }
-            )
-        elapsed = time.perf_counter() - t_start
-        rows.sort(key=lambda r: r[0])
+        counts["engines"] = len(topologies)
+        return rows, failed, counts
 
-        # Cite MDI, which makes the resident-engine evaluation possible. The
-        # plug-in's own reference is added by the base class.
-        if path == "mdi" and "mdi" in self._bibliography:
-            self.references.cite(
-                raw=self._bibliography["mdi"],
-                alias="mdi",
-                module="energy_step",
-                level=1,
-                note="The MolSSI Driver Interface used to drive the engine.",
+    @staticmethod
+    def _how(counts):
+        """How the structures were evaluated, for the report."""
+        parts = []
+        if counts["mdi"]:
+            n = counts["engines"]
+            text = f"{counts['mdi']} over MDI in {n} " + (
+                "engine session" if n == 1 else "engine sessions"
             )
+            if not counts["tasks"]:
+                text = f"using {n} " + (
+                    "engine session" if n == 1 else "engine sessions"
+                )
+            parts.append(text)
+        if counts["tasks"]:
+            text = f"{counts['tasks']} as separate calculations"
+            if not counts["mdi"]:
+                text = f"as {counts['tasks']} separate calculations"
+            if counts["restored"]:
+                text += f", {counts['restored']} of them finished in an earlier run"
+            parts.append(text)
+        return " and ".join(parts)
 
-        if path == "mdi":
-            how = f"using {n_engines} " + (
-                "engine session" if n_engines == 1 else "engine sessions"
-            )
-        else:
-            how = f"as {len(configurations)} separate calculations"
-            if restored:
-                how += f", {restored} of them finished in an earlier run"
-        self.analyze(
-            P=P,
-            rows=rows,
-            model_chemistry=mc["level"],
-            n_engines=n_engines,
-            how=how,
-            elapsed=elapsed,
-            directory=directory,
+    @staticmethod
+    def _report_failures(failed, n):
+        """Raise, listing the structures that failed (after the others were
+        stored)."""
+        if not failed:
+            return
+        lines = "\n".join(
+            f"    {configuration.name}: {reason}" for configuration, reason in failed
         )
-
-        if failed:
-            lines = "\n".join(
-                f"    {configuration.name}: {reason}"
-                for configuration, reason in failed
-            )
-            raise RuntimeError(
-                f"{len(failed)} of {len(configurations)} structures could not be "
-                f"evaluated; the others are stored:\n{lines}"
-            )
-
-        return next_node
+        raise RuntimeError(
+            f"{len(failed)} of {n} structures could not be evaluated; the others "
+            f"are stored:\n{lines}"
+        )
 
     def _store(self, configuration, data, want_gradients, do_stress):
         """Store the results on the configuration and via store_results.
