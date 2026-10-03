@@ -2,10 +2,10 @@
 Usage
 =====
 
-The Energy step needs a *Model Chemistry* step before it in the flowchart, choosing a
-method that can be driven as an MDI engine: an ``xnn:MLFF@<model>`` machine-learned force
-field, ``MOPAC:SQM@PM6-ORG``, ``xTB:SQM@GFN2-xTB``, or an ORCA DFT model, for example.
-It then evaluates that method's energy for the structures you select.
+The Energy step needs a *Model Chemistry* step before it in the flowchart: an
+``xnn:MLFF@<model>`` machine-learned force field, ``MOPAC:SQM@PM6-ORG``,
+``xTB:SQM@GFN2-xTB``, or an ORCA model such as ``ORCA:DFT@B3LYP/def2-TZVP``, for
+example. It then evaluates that method's energy for the structures you select.
 
 A typical flowchart to label an ensemble for training a force field::
 
@@ -40,20 +40,34 @@ Results
 How it runs
 -----------
 
-The configurations are grouped by what an MDI engine keeps fixed for a session -- the
-atomic numbers (in order), charge, spin multiplicity and periodicity -- and one engine is
-started per group with ``seamm_mdi.MDIEngine``. Within a group the structures are sent
-one after another (``>CELL`` for periodic systems, then ``>COORDS``) and ``<ENERGY``,
-``<FORCES`` and ``<STRESS`` are read back, so the program's start-up (and, for an MLFF,
-loading the model) is paid once. The per-structure energies, forces and timings are
-written to ``energies.csv`` in the step's directory; up to 25 structures are also tabled
-in the step output.
+The step hands the structures to SEAMM's evaluator, which chooses how to compute them;
+the numbers are the same either way.
+
+Over MDI
+    For programs with a fast, resident engine -- MLFFs, MOPAC, xTB -- the structures are
+    grouped by what an MDI engine keeps fixed for a session (the atomic numbers in order,
+    charge, spin multiplicity and periodicity), one engine is started per group, and the
+    structures are sent one after another (``>CELL`` for periodic systems, then
+    ``>COORDS``), reading back ``<ENERGY``, ``<FORCES`` and ``<STRESS``. The program's
+    start-up (and, for an MLFF, loading the model) is paid once.
+
+As separate calculations
+    For ORCA, which runs once per structure anyway, and for any model chemistry when the
+    job's tasks go to a cluster queue, each structure is a separate calculation. They run
+    concurrently on this machine or are bundled into batch jobs on the cluster, and are
+    kept in ``tasks/c<id>/`` in the step's directory. Running the job again in the same
+    directory reuses the finished calculations.
+
+The per-structure energies, forces and timings are written to ``energies.csv`` in the
+step's directory; up to 25 structures are also tabled in the step output. If some
+structures fail, the others are still stored and the step then stops, listing the
+failures.
 
 Notes
 -----
 
-* A flowchart edited by hand may name a Model Chemistry that is not MDI-capable; the
-  step then stops with a message naming the model chemistry rather than silently doing
-  nothing.
+* A flowchart edited by hand may name a Model Chemistry that can be evaluated neither
+  over MDI nor as separate calculations; the step then stops with a message naming it
+  rather than silently doing nothing.
 * The Model Chemistry used here need not be the one used to build the structures: a
   cheap method can generate an ensemble and an expensive one label it, or vice versa.
