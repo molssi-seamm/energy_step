@@ -227,7 +227,10 @@ class Energy(seamm.Node):
                 # The configuration's id names its calculation, so a rerun in
                 # the same job directory finds it; its fingerprint protects
                 # correctness if the ids ever shift.
-                key = evaluator.submit(configuration, key=f"c{configuration.id}")
+                key = f"c{configuration.id}"
+                if key in members:
+                    continue  # selected twice: evaluated once
+                evaluator.submit(configuration, key=key)
                 members[key] = (index, configuration)
             for result in evaluator.results():
                 index, configuration = members[result.key]
