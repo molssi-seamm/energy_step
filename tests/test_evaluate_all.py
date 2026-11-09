@@ -53,12 +53,17 @@ def _configuration(id_, name):
 def me(monkeypatch):
     monkeypatch.setattr(seamm_exec, "Evaluator", FakeEvaluator)
     stored = []
+    records = []
     node = types.SimpleNamespace(
         _store=lambda configuration, data, gradients, stress: stored.append(
             (configuration.id, data["energy"])
-        )
+        ),
+        _store_calculation_record=lambda configuration, result: records.append(
+            (configuration.id, (result.data or {}).get("calculation"))
+        ),
     )
     node.stored = stored
+    node.records = records
     return node
 
 
@@ -101,3 +106,50 @@ def test_the_report_says_how():
     assert Energy._how({"mdi": 1, "tasks": 4, "restored": 0, "engines": 1}) == (
         "1 over MDI in 1 engine session and 4 as separate calculations"
     )
+
+
+def test_calculation_records_are_passed_on(me):
+    FakeEvaluator.plan = {"c3": {"data": {"calculation": {"fingerprint": "fp"}}}}
+    try:
+        Energy._evaluate_all(
+            me, {"level": "X"}, [_configuration(3, "a")], ["energy"], False, False
+        )
+    finally:
+        FakeEvaluator.plan = {}
+    assert me.records == [(3, {"fingerprint": "fp"})]
+
+
+def test_store_calculation_record(tmp_path):
+    """The settings fingerprint and the record become properties of the
+    configuration, named like the energy, for a store's harvest."""
+    molsystem = pytest.importorskip("molsystem")
+    db = molsystem.SystemDB(filename=f"file:{tmp_path / 'seamm.db'}")
+    try:
+        configuration = db.create_system(name="w").create_configuration()
+        configuration.from_smiles("O")
+        node = types.SimpleNamespace(model="ORCA:DFT@X/def2-SVP")
+        record = {
+            "program": "ORCA",
+            "fingerprint": "sha256:abc",
+            "geometry fingerprint": "sha256:geo",
+        }
+        Energy._store_calculation_record(
+            node,
+            configuration,
+            EvaluatorResult(
+                key="c1", ok=True, energy=-1.0, data={"calculation": record}
+            ),
+        )
+        p = configuration.properties
+        name = "settings fingerprint#Energy#ORCA:DFT@X/def2-SVP"
+        assert p.get(name)[name]["value"] == "sha256:abc"
+        name = "calculation#Energy#ORCA:DFT@X/def2-SVP"
+        assert p.get(name)[name]["value"]["geometry fingerprint"] == "sha256:geo"
+        # No record (e.g. an engine without fingerprints): nothing stored
+        other = db.create_system(name="x").create_configuration()
+        Energy._store_calculation_record(
+            node, other, EvaluatorResult(key="c2", ok=True, energy=-1.0)
+        )
+        assert not other.properties.get("settings fingerprint#*")
+    finally:
+        db.close()
