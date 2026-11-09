@@ -65,6 +65,14 @@ and the output then says how many went each way. If there is no engine on this m
 (a cluster queue, with the program installed only there), that structure fails with the
 reason and the others are stored.
 
+When the program reports the record of a calculation's settings (ORCA's separate
+calculations do, from orca-step 2026.11.8.2), it is stored with the energy as the
+properties ``settings fingerprint#Energy#<model>`` and ``calculation#Energy#<model>``.
+The settings fingerprint identifies the level of theory whatever the cores, memory and
+geometry, and the record also holds the fingerprint of the geometry the calculation ran
+on, so a store of energies, such as seamm-thermochemistry's fragment store, can file
+each energy with its exact settings and pair it with its geometry.
+
 The per-structure energies, forces and timings are written to ``energies.csv`` in the
 step's directory; up to 25 structures are also tabled in the step output. If some
 structures fail, the others are still stored and the step then stops, listing the

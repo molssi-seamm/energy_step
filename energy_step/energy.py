@@ -306,6 +306,7 @@ class Energy(seamm.Node):
                 data["configuration name"] = configuration.name
                 data["model chemistry"] = mc["level"]
                 self._store(configuration, data, "gradients" in data, do_stress)
+                self._store_calculation_record(configuration, result)
                 rows.append((index, configuration, data))
         counts["engines"] = len(topologies)
         return rows, failed, counts
@@ -367,6 +368,29 @@ class Energy(seamm.Node):
             )
 
         self.store_results(configuration=configuration, data=data)
+
+    def _store_calculation_record(self, configuration, result):
+        """Store the record of the calculation's settings, when the program gives
+        one, as the properties ``settings fingerprint#Energy#<model>`` and
+        ``calculation#Energy#<model>``: the settings fingerprint identifies the
+        level of theory whatever the cores, memory and geometry, and the record
+        holds the fingerprint of the geometry the calculation ran on. With them a
+        store of energies (e.g. seamm-thermochemistry's fragment store) can file the
+        energy with its exact settings and pair it with its geometry."""
+        record = (result.data or {}).get("calculation")
+        if not isinstance(record, dict):
+            return
+        properties = configuration.properties
+        values = [("calculation", record, "json")]
+        if record.get("fingerprint"):
+            values.insert(0, ("settings fingerprint", record["fingerprint"], "str"))
+        for base, value, _type in values:
+            name = f"{base}#Energy#{self.model}"
+            if not properties.exists(name):
+                properties.add(
+                    name, _type, description=f"{base} ({self.model})", noerror=True
+                )
+            properties.put(name, value)
 
     def _put_property(self, configuration, key, value, units, _type="float"):
         """Store a ``<key>#Energy#<model>`` property, defining it if needed."""

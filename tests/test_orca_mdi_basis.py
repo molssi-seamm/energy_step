@@ -67,6 +67,8 @@ def test_energy_step_mdi_runs_the_chosen_basis(basis, tmp_path):
         energy = engine.energy(units="hartree")
 
     first = (scratch / "orca.inp").read_text().splitlines()[0]
+    # The engine's own settings (orca-step 2026.10.9 on), not the basis
+    first = " ".join(w for w in first.split() if w not in ("TIGHTSCF", "DEFGRID3"))
     if basis.startswith("bse:"):
         assert first == "! B3LYP AutoAux EnGrad"
         assert (scratch / "basis.bas").exists()
@@ -77,7 +79,7 @@ def test_energy_step_mdi_runs_the_chosen_basis(basis, tmp_path):
     direct = tmp_path / "direct"
     direct.mkdir()
     (direct / "orca.inp").write_text(
-        "! B3LYP AutoAux def2-TZVP EnGrad\n* xyz 0 1\n"
+        "! B3LYP AutoAux def2-TZVP TIGHTSCF DEFGRID3 EnGrad\n* xyz 0 1\n"
         + "".join(f"{el} {x} {y} {z}\n" for el, (x, y, z) in zip("OHH", WATER.tolist()))
         + "*\n"
     )

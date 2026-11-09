@@ -2,6 +2,16 @@
 History
 =======
 
+2026.11.8 (2026-11-08)
+----------------------
+
+* When the program reports the record of a calculation's settings (ORCA's separate
+  calculations do, from orca-step 2026.11.8.2), the step stores it with the energy, as
+  the properties ``settings fingerprint#Energy#<model>`` and
+  ``calculation#Energy#<model>``: the fingerprint of the level of theory and of the
+  geometry the calculation ran on. A store of energies, such as seamm-thermochemistry's
+  fragment store, can then file each energy with its exact settings.
+
 2026.10.3 (2026-10-03)
 ----------------------
 
