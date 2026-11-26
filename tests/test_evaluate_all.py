@@ -153,3 +153,30 @@ def test_store_calculation_record(tmp_path):
         assert not other.properties.get("settings fingerprint#*")
     finally:
         db.close()
+
+
+def test_the_spin_of_an_open_shell_is_stored(monkeypatch):
+    """<S**2> and S(S+1) from the Evaluator's data reach the stored data (and so
+    the properties), for spin-contamination checks; closed shells have none."""
+    monkeypatch.setattr(seamm_exec, "Evaluator", FakeEvaluator)
+    stored = {}
+    node = types.SimpleNamespace(
+        _store=lambda configuration, data, gradients, stress: stored.update(
+            {configuration.id: data}
+        ),
+        _store_calculation_record=lambda configuration, result: None,
+    )
+    FakeEvaluator.plan = {"c1": {"data": {"spin": {"S**2": 2.031, "S(S+1)": 2.0}}}}
+    try:
+        Energy._evaluate_all(
+            node,
+            {"level": "X"},
+            [_configuration(1, "triplet"), _configuration(2, "singlet")],
+            ["energy"],
+            False,
+            False,
+        )
+    finally:
+        FakeEvaluator.plan = {}
+    assert stored[1]["S**2"] == 2.031 and stored[1]["S(S+1)"] == 2.0
+    assert "S**2" not in stored[2]

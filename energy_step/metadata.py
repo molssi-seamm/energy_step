@@ -43,6 +43,22 @@ metadata["results"] = {
         "units": "GPa",
         "format": ".4f",
     },
+    "S**2": {
+        "description": "The expectation value <S**2> of an open-shell calculation",
+        "dimensionality": "scalar",
+        "property": "S**2#Energy#{model}",
+        "type": "float",
+        "units": "",
+        "format": ".4f",
+    },
+    "S(S+1)": {
+        "description": "The ideal value S(S+1) of <S**2>",
+        "dimensionality": "scalar",
+        "property": "S(S+1)#Energy#{model}",
+        "type": "float",
+        "units": "",
+        "format": ".4f",
+    },
     "maximum force": {
         "description": "The largest force component on any atom",
         "dimensionality": "scalar",

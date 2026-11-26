@@ -2,3 +2,5 @@ Property,Type,Units,Description,URL
 energy#Energy#{model},float,kJ/mol,"The {model} energy of the structure.",
 gradients#Energy#{model},json,kJ/mol/Å,"The {model} gradients on the atoms, dE/dx, one row per atom.",
 stress#Energy#{model},json,GPa,"The {model} stress tensor (3x3, pressure sign convention).",
+S**2#Energy#{model},float,,"The expectation value <S**2> of the {model} open-shell calculation (spin contamination).",
+S(S+1)#Energy#{model},float,,"The ideal value S(S+1) of <S**2> for the {model} open-shell calculation.",
