@@ -302,6 +302,10 @@ class Energy(seamm.Node):
                 do_stress = want_stress and result.stress is not None
                 if do_stress:
                     data["stress"] = result.stress
+                spin = (result.data or {}).get("spin")
+                if spin:
+                    data["S**2"] = float(spin["S**2"])
+                    data["S(S+1)"] = float(spin["S(S+1)"])
                 data["elapsed time"] = result.elapsed
                 data["configuration name"] = configuration.name
                 data["model chemistry"] = mc["level"]
@@ -366,6 +370,10 @@ class Energy(seamm.Node):
             self._put_property(
                 configuration, "stress", data["stress"], _S_UNITS, "json"
             )
+        # an open-shell calculation's <S**2>, for spin-contamination checks
+        for key in ("S**2", "S(S+1)"):
+            if key in data:
+                self._put_property(configuration, key, data[key], "")
 
         self.store_results(configuration=configuration, data=data)
 

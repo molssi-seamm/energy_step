@@ -2,6 +2,14 @@
 History
 =======
 
+2026.11.25 -- <S**2> of open-shell calculations
+    * For an open-shell calculation the step now stores the expectation value <S**2>
+      and its ideal value S(S+1) on each configuration, as the properties
+      ``S**2#Energy#<model>`` and ``S(S+1)#Energy#<model>``, and as results, so spin
+      contamination or a change of electronic state can be checked, e.g. by the Export
+      Training Set step. Needs seamm-exec 2026.11.25.3 (over MDI) or orca-step
+      2026.11.25.1 (separate calculations).
+
 2026.11.8 (2026-11-08)
 ----------------------
 
